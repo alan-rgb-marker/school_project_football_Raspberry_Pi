@@ -5,7 +5,6 @@ def circle_dectect(frame):
     #cv2.imshow("frame", frame)
     gray_gauss_canny_frame = cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
     gray_gauss_canny_frame = cv2.GaussianBlur(gray_gauss_canny_frame,(7,7),0)
-    #gray_gauss_canny_frame = cv2.Canny(gray_gauss_canny_frame, 50, 150)
     circles = cv2.HoughCircles(
         gray_gauss_canny_frame,                      # 影像（灰階即可）
         cv2.HOUGH_GRADIENT,        # 方法：固定使用 HOUGH_GRADIENT
@@ -31,17 +30,20 @@ def draw_circle(frame, circles):
 
 
 #------------------main----------------------------
-cap = cv2.VideoCapture(2)
+cap = cv2.VideoCapture(0)
 while True:
     ret, frame = cap.read()
     if not ret:
         print("無法讀取影像幀，退出。")
         break
+    cv2.namedWindow("football", cv2.WINDOW_NORMAL)
+    cv2.resizeWindow("football", 642, 320) 
+    
     circles = circle_dectect(frame)
     
     circle_frame = draw_circle(frame, circles)
             
-    cv2.imshow("canny",circle_frame)
+    cv2.imshow("football",circle_frame)
     
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break 
