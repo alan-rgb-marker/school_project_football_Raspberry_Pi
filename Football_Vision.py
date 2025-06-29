@@ -1,66 +1,75 @@
 import cv2
 import numpy as np
+import serial
 
 origin_x = 642
 origin_y = 320
 
-def circle_detect(frame):  
-    gray_gauss_canny_frame = cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
-    gray_gauss_canny_frame = cv2.GaussianBlur(gray_gauss_canny_frame,(7,7),0)
-    circles = cv2.HoughCircles(
-        gray_gauss_canny_frame,    # 影像（灰階即可）
-        cv2.HOUGH_GRADIENT,        # 方法：固定使用 HOUGH_GRADIENT
-        dp=1.2,                    # 累加器解析度與影像解析度的反比，例如=1 代表相同解析度
-        minDist=20,                # 圓心間最小距離（太小會重複偵測同一個圓）
-        param1=150,                # Canny 邊緣檢測的高門檻（低門檻會自動 = param1 * 0.5）
-        param2=30,                 # 霍夫累加器的閾值（越小找的圓越多，但可能雜訊）
-        minRadius=3,               # 圓半徑最小值（設 0 表示不限制）
-        maxRadius=20               # 圓半徑最大值（設 0 表示不限制）
-    )
+class DetectCircle:
+    def __init__(self):
+        pass
 
-    return circles
-def draw_circle(frame, circles):
-    circle_frame = frame.copy()
-    if circles is not None:
-        circles = np.uint16(np.around(circles))
-        for i in circles[0, :]:
-            # 繪製圓的外框
-            cv2.circle(circle_frame, (i[0], i[1]), i[2], (0, 255, 0), 2)  # 綠色圓框
-            # 繪製圓心
-            cv2.circle(circle_frame, (i[0], i[1]), 2, (0, 0, 255), 3)  # 紅色圓心
-            cv2.putText(circle_frame, f"({int(i[0]) - origin_x}, {int(i[1]) - origin_y})", (i[0] + 15, i[1]-20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
-    return circle_frame
-def coordDetection(coordDetectionFrame):
-    global origin_x
-    global origin_y
-    circles = circle_detect(coordDetectionFrame)
-    if circles is not None:
-        origin_tmp_x = int(circles[0][0][0])
-        origin_tmp_y = int(circles[0][0][1])
-        # 圓看誰在左上角
-        origin_x = int(min(circles[0, :, 0]))
-        origin_y = int(min(circles[0, :, 1]))
-        cv2.putText(coordDetectionFrame, f"({0}, {0})", (origin_x + 15, origin_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
-    return coordDetectionFrame
+    def circle_detect(self, frame):  
+        gray_gauss_canny_frame = cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
+        gray_gauss_canny_frame = cv2.GaussianBlur(gray_gauss_canny_frame,(7,7),0)
+
+        circles = cv2.HoughCircles(
+            gray_gauss_canny_frame,    # 影像（灰階即可）
+            cv2.HOUGH_GRADIENT,        # 方法：固定使用 HOUGH_GRADIENT
+            dp=1.2,                    # 累加器解析度與影像解析度的反比，例如=1 代表相同解析度
+            minDist=20,                # 圓心間最小距離（太小會重複偵測同一個圓）
+            param1=150,                # Canny 邊緣檢測的高門檻（低門檻會自動 = param1 * 0.5）
+            param2=30,                 # 霍夫累加器的閾值（越小找的圓越多，但可能雜訊）
+            minRadius=3,               # 圓半徑最小值（設 0 表示不限制）
+            maxRadius=20               # 圓半徑最大值（設 0 表示不限制）
+        )
+    
+        return circles
+
+    def set_origin(self, circles):
+        global origin_x
+        global origin_y
+
+        if circles is not None:
+            # 圓看誰在左上角
+            origin_x = int(min(circles[0, :, 0]))
+            origin_y = int(min(circles[0, :, 1]))
+        return frame
+    
+    def draw_circle(self, frame, circles):
+        if circles is not None:
+            circles = np.uint16(np.around(circles))
+            for i in circles[0, :]:
+                # 繪製圓的外框
+                cv2.circle(frame, (i[0], i[1]), i[2], (0, 255, 0), 2)  # 綠色圓框
+                # 繪製圓心
+                cv2.circle(frame, (i[0], i[1]), 2, (0, 0, 255), 3)  # 紅色圓心
+                # 顯示圓心座標
+                cv2.putText(frame, f"({int(i[0]) - origin_x}, {int(i[1]) - origin_y})", (i[0] + 15, i[1]-20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+            # 顯示原點
+            cv2.circle(frame, (origin_x, origin_y), 5, (255, 0, 255), -1)  
+            # 顯示原點座標
+            cv2.putText(frame, f"({0}, {0})", (origin_x + 15, origin_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
+
 
 
 #-------------------------main----------------------------
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(2)
+cv2.namedWindow("football", cv2.WINDOW_NORMAL)
+cv2.resizeWindow("football", 642, 320) 
 while True:
     ret, frame = cap.read()
     if not ret:
         print("無法讀取影像幀，退出。")
         break
-    cv2.namedWindow("football", cv2.WINDOW_NORMAL)
-    cv2.resizeWindow("football", 642, 320) 
     
-    frame = coordDetection(frame) # 設定原點或更新原點
+    detect = DetectCircle()
+    circles = detect.circle_detect(frame)
     
-    circles = circle_detect(frame)
+    detect.set_origin(circles) # 設定原點或更新原點
     
-    frame = draw_circle(frame, circles)
+    detect.draw_circle(frame, circles)
     
-    cv2.circle(frame, (origin_x, origin_y), 5, (255, 0, 255), -1)          
     cv2.imshow("football",frame)
     
     if cv2.waitKey(1) & 0xFF == ord('q'):
