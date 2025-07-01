@@ -96,9 +96,9 @@ def circle_detect(frame):
         cv2.HOUGH_GRADIENT,
         dp=1.2,
         minDist=30,
-        param1=100,
-        param2=30,
-        minRadius=5,
+        param1=150,
+        param2=50,
+        minRadius=7,
         maxRadius=30
     )
     return circles
@@ -137,7 +137,8 @@ while True:
         circles = np.round(circles[0, :]).astype("int")
         # 試著過濾出半徑最接近的4個圓（可選擇性使用）
         circles = sorted(circles, key=lambda c: c[2])[:4]  # 挑半徑最小的 4 個
-
+        # circles = sorted([c for c in circles if c[2] > 7], key=lambda c: c[2])[:4]
+        # ball_circle = sorted([c for c in circles if c[2] < 18], key=lambda c: c[2])[:1]
         centers = np.array(circles)[:, :2]
 
         sorted_centers = sort_circle_centers(centers)
