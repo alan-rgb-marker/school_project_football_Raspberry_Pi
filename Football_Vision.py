@@ -12,7 +12,7 @@ class DetectCircle:
 
     def circle_detect(self, frame):  
         gray_gauss_canny_frame = cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
-        gray_gauss_canny_frame = cv2.GaussianBlur(gray_gauss_canny_frame,(9,9),0)
+        gray_gauss_canny_frame = cv2.GaussianBlur(gray_gauss_canny_frame,(11,11),0)
 
         circles = cv2.HoughCircles(
             gray_gauss_canny_frame,    # 影像（灰階即可）
@@ -21,8 +21,8 @@ class DetectCircle:
             minDist=50,                # 圓心間最小距離（太小會重複偵測同一個圓）
             param1=150,                # Canny 邊緣檢測的高門檻（低門檻會自動 = param1 * 0.5）
             param2=25,                 # 霍夫累加器的閾值（越小找的圓越多，但可能雜訊）
-            minRadius=5,               # 圓半徑最小值（設 0 表示不限制）
-            maxRadius=15               # 圓半徑最大值（設 0 表示不限制）
+            minRadius=9,               # 圓半徑最小值（設 0 表示不限制）
+            maxRadius=20               # 圓半徑最大值（設 0 表示不限制）
         )
     
         return circles
@@ -46,7 +46,7 @@ class DetectCircle:
                 # 繪製圓心
                 cv2.circle(frame, (i[0], i[1]), 2, (0, 0, 255), 3)  # 紅色圓心
                 # 顯示圓心座標
-                cv2.putText(frame, f"({int(i[0]) - origin_x}, {int(i[1]) - origin_y}), {i[2]}", (i[0] + 15, i[1]-20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+                cv2.putText(frame, f"({int(i[0]) - origin_x}, {int(i[1]) - origin_y}, {i[2]})", (i[0] + 15, i[1]+10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
         # 顯示原點
         cv2.circle(frame, (origin_x, origin_y), 5, (255, 0, 255), -1)  
         # 顯示原點座標
@@ -63,15 +63,20 @@ while True:
     if not ret:
         print("無法讀取影像幀，退出。")
         exit()
-        origin_frame = origin_frame[0:330, 0:640]
+    origin_frame = origin_frame[0:330, 0:640]
 
     origin_detect = DetectCircle()
     origin_circles = origin_detect.circle_detect(origin_frame)
-    if origin_circles is not None and origin_circles.shape[1] == 1:
+    if origin_circles is not None and origin_circles.shape[1] == 1:# and origin_circles[0, 0, 2] > 16:# 15指的是圓的半徑，原點的半徑要超過像素15
         origin_detect.set_origin(origin_circles)
         break
+    else:
+        print("超過兩個圓")
+        origin_detect.draw_circle(origin_frame, origin_circles)
+    cv2.imshow("football", origin_frame)
     
-
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
 
 #偵測圓和座標系統
 while True:
