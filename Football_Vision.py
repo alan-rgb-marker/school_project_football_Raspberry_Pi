@@ -2,9 +2,11 @@ import cv2
 import numpy as np
 import serial
 import threading
-from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel
+from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtCore import Qt, QTimer
+import sys
+import time
 
 origin_x = 642
 origin_y = 320
@@ -55,37 +57,128 @@ class DetectCircle:
         # 顯示原點座標
         cv2.putText(frame, f"({0}, {0})", (origin_x + 15, origin_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
 
+class VideoWidget(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Circle Detection")
+        self.setGeometry(0, 0, 1080, 600)
+        
+        # 建立布局
+        main_layout = QVBoxLayout()
 
+        # 建立標籤來顯示影像
+        self.image_label = QLabel()
+        self.image_label.setAlignment(Qt.AlignCenter)
+        self.image_label.setMinimumSize(640, 330)
+        self.image_label.setStyleSheet("background-color: black;" 
+                                       "color: white;"
+                                       "font-size: 24px;"           # 设置字体大小，可选
+                                       "font-weight: bold;")
+        self.image_label.setText("未開始")
+        main_layout.addWidget(self.image_label)
+        
+        #按鈕
+        button_layout = QHBoxLayout()
+        self.start_button = QPushButton("開始")
+        self.start_button.clicked.connect(self.start_process)
+        self.stop_button = QPushButton("停止")
+        self.stop_button.clicked.connect(self.stop_process)
+        button_layout.addWidget(self.start_button)
+        button_layout.addWidget(self.stop_button)
+        
+        #啟動排版
+        main_layout.addLayout(button_layout)
+        self.setLayout(main_layout)
+        
+        # 初始化攝影機
+        # self.cap = cv2.VideoCapture(0)
+        self.cap = None
+        self.detect = DetectCircle()
+        self.origin_set = False
+        
+        # 建立計時器來更新影像
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.update_frame)
+        self.timer.start(15)  # 30ms 更新一次
+        
+        #啟動變數
+        self.start = False    
+        self.countdown_seconds = 3
+        
+    #主程式：偵測圓和設定原點    
+    def update_frame(self):
+        if self.start == True:
+            ret, frame = self.cap.read()
+            if not ret:
+                return
+
+            # 裁剪影像
+            frame = frame[0:330, 0:640]
+
+            # 檢測圓形
+            circles = self.detect.circle_detect(frame)
+
+            # 如果還沒設定原點，嘗試設定
+            if not self.origin_set:
+                if circles is not None and circles.shape[1] == 1:
+                    self.detect.set_origin(circles)
+                    self.origin_set = True
+
+            # 繪製圓形
+            self.detect.draw_circle(frame, circles)
+
+            # 轉換為 QImage 並顯示
+            # rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            # rgb_image = frame
+            h, w, ch = frame.shape
+            # bytes_per_line = ch * w
+            # qt_image = QImage(frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
+            qt_image = QImage(frame.data, w, h, QImage.Format_RGB888)
+
+            pixmap = QPixmap.fromImage(qt_image)
+            self.image_label.setPixmap(pixmap)
+        
+        elif self.start == False:
+            # self.image_label.setText("未開始")
+            pass
+    
+    def closeEvent(self, event):
+        self.cap.release()
+        event.accept()
+    
+    def start_process(self):
+        
+        if self.countdown_seconds > 0:
+            self.image_label.setText(f"倒數 {self.countdown_seconds} 秒開始")
+            self.countdown_seconds -= 1
+            QTimer.singleShot(1000, self.start_process)  # 每 1 秒呼叫一次自己
+        else:
+            self.image_label.setText("開始！")
+            self.cap = cv2.VideoCapture(0)
+            self.start = True  # 倒數完畢才開始執行你的邏輯
+        
+    def stop_process(self):
+        self.start = False
+        self.image_label.setStyleSheet("background-color: black;" 
+                                       "color: white;"
+                                       "font-size: 24px;"           # 设置字体大小，可选
+                                       "font-weight: bold;")
+        self.image_label.setText("未開始")
+        self.countdown_seconds = 3
+        self.cap.release() 
 
 #-------------------------main----------------------------
 def main():
-    test = False
-    cap = cv2.VideoCapture(0)
-
-    #偵測圓和座標系統
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            print("無法讀取影像幀，退出。")
-            break
-        frame = frame[0:330, 0:640]
-        detect = DetectCircle()
-        circles = detect.circle_detect(frame)
-        
-        if test == False:
-            # 設定原點或更新原點
-            if circles is not None and circles.shape[1] == 1:
-                detect.set_origin(circles)
-                test = True
-            else:
-                print("超過兩個圓")
-
-        # detect.set_origin(circles) 
-        detect.draw_circle(frame, circles)
-        cv2.imshow("football",frame)
-
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break 
-        
-a = threading.Thread(target = main)
-a.start()
+    app = QApplication(sys.argv)
+    
+    # 建立並顯示視窗
+    window = VideoWidget()
+    window.show()
+    
+    # 執行應用程式
+    sys.exit(app.exec())
+    
+if __name__ == "__main__":
+    # main()
+    a = threading.Thread(target=main)
+    a.start()
