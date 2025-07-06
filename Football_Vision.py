@@ -2,6 +2,9 @@ import cv2
 import numpy as np
 import serial
 import threading
+from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel
+from PySide6.QtGui import QImage, QPixmap
+from PySide6.QtCore import Qt, QTimer
 
 origin_x = 642
 origin_y = 320
@@ -56,28 +59,8 @@ class DetectCircle:
 
 #-------------------------main----------------------------
 def main():
+    test = False
     cap = cv2.VideoCapture(0)
-    # 設定原點或更新原點
-
-    while True: 
-        ret, origin_frame = cap.read()
-        if not ret:
-            print("無法讀取影像幀，退出。")
-            exit()
-        origin_frame = origin_frame[0:330, 0:640]
-
-        origin_detect = DetectCircle()
-        origin_circles = origin_detect.circle_detect(origin_frame)
-        if origin_circles is not None and origin_circles.shape[1] == 1:# and origin_circles[0, 0, 2] > 16:# 15指的是圓的半徑，原點的半徑要超過像素15
-            origin_detect.set_origin(origin_circles)
-            break
-        else:
-            print("超過兩個圓")
-            origin_detect.draw_circle(origin_frame, origin_circles)
-        cv2.imshow("football", origin_frame)
-
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
 
     #偵測圓和座標系統
     while True:
@@ -88,6 +71,14 @@ def main():
         frame = frame[0:330, 0:640]
         detect = DetectCircle()
         circles = detect.circle_detect(frame)
+        
+        if test == False:
+            # 設定原點或更新原點
+            if circles is not None and circles.shape[1] == 1:
+                detect.set_origin(circles)
+                test = True
+            else:
+                print("超過兩個圓")
 
         # detect.set_origin(circles) 
         detect.draw_circle(frame, circles)
