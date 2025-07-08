@@ -2,14 +2,24 @@ import cv2
 import numpy as np
 import serial
 import threading
-from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
+from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton, QSizePolicy, QMessageBox
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtCore import Qt, QTimer
 import sys
+import subprocess
 import time
 
 origin_x = 642
 origin_y = 320
+
+ball_x = 0
+ball_y = 0
+
+read_data = None
+write_data = "hello world"
+
+#啟動
+start = False
 
 class DetectCircle:
     def __init__(self):
@@ -42,6 +52,17 @@ class DetectCircle:
             origin_y = int(min(circles[0, :, 1]))
         # return frame
     
+    def find_ball(self, circles):
+        global ball_x
+        global ball_y
+        global origin_x
+        global origin_y
+        for i in circles[0, :]:
+            #靠球的半徑判斷哪個是球
+            if i[2] > 14 and i[2] < 17:
+                ball_x = i[0] - origin_x
+                ball_y = i[1] - origin_y
+    
     def draw_circle(self, frame, circles):
         if circles is not None:
             circles = np.uint16(np.around(circles))
@@ -59,7 +80,7 @@ class DetectCircle:
 
 class VideoWidget(QWidget):
     def __init__(self):
-        super().__init__()
+        super().__init__()        
         self.setWindowTitle("Circle Detection")
         self.setGeometry(0, 0, 1080, 600)
         
@@ -75,19 +96,46 @@ class VideoWidget(QWidget):
                                        "font-size: 24px;"           # 设置字体大小，可选
                                        "font-weight: bold;")
         self.image_label.setText("未開始")
-        main_layout.addWidget(self.image_label)
+        main_layout.addWidget(self.image_label, 2)
         
         #按鈕
-        button_layout = QHBoxLayout()
+        layout = QGridLayout()
         self.start_button = QPushButton("開始")
+        self.start_button.setStyleSheet("font-size: 40px")
         self.start_button.clicked.connect(self.start_process)
+        
         self.stop_button = QPushButton("停止")
+        self.stop_button.setStyleSheet("font-size: 40px")
         self.stop_button.clicked.connect(self.stop_process)
-        button_layout.addWidget(self.start_button)
-        button_layout.addWidget(self.stop_button)
+        
+        #關機
+        self.poweroff_button = QPushButton("關機")
+        self.poweroff_button.setStyleSheet("font-size: 40px")
+        self.poweroff_button.clicked.connect(self.poweroff)
+        
+        layout.addWidget(self.start_button, 0, 0)
+        layout.addWidget(self.stop_button, 0, 1)
+        layout.addWidget(self.poweroff_button, 1, 0)
+        
+        #比分
+        score_lauout = QHBoxLayout()
+        self.computer_label = QLabel("電腦\n0")
+        self._label = QLabel("比分\n  :  ")
+        self.player_label = QLabel("我方\n0")
+        
+        for lbl in [self.computer_label, self._label, self.player_label]:
+            lbl.setAlignment(Qt.AlignCenter)
+            lbl.setStyleSheet("font-size: 36px; font-weight: bold;")
+        
+        score_lauout.addWidget(self.computer_label)
+        score_lauout.addWidget(self._label)
+        score_lauout.addWidget(self.player_label)
+        
+        layout.addLayout(score_lauout, 1, 1)
         
         #啟動排版
-        main_layout.addLayout(button_layout)
+        main_layout.addLayout(layout, 2)
+        # main_layout.addLayout(score_layout)
         self.setLayout(main_layout)
         
         # 初始化攝影機
@@ -102,12 +150,17 @@ class VideoWidget(QWidget):
         self.timer.start(15)  # 30ms 更新一次
         
         #啟動變數
-        self.start = False    
+          
         self.countdown_seconds = 3
+        
+        
+        #串口輸入輸出
+        self.send_stm32_data = Stm32_serial()
         
     #主程式：偵測圓和設定原點    
     def update_frame(self):
-        if self.start == True:
+        global start
+        if start == True:
             ret, frame = self.cap.read()
             if not ret:
                 return
@@ -123,22 +176,25 @@ class VideoWidget(QWidget):
                 if circles is not None and circles.shape[1] == 1:
                     self.detect.set_origin(circles)
                     self.origin_set = True
-
+            else:
+                self.detect.find_ball()
             # 繪製圓形
             self.detect.draw_circle(frame, circles)
 
+            
+            
             # 轉換為 QImage 並顯示
-            # rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             # rgb_image = frame
-            h, w, ch = frame.shape
+            h, w, ch = rgb_image.shape
             # bytes_per_line = ch * w
             # qt_image = QImage(frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
-            qt_image = QImage(frame.data, w, h, QImage.Format_RGB888)
+            qt_image = QImage(rgb_image.data, w, h, QImage.Format_RGB888)
 
             pixmap = QPixmap.fromImage(qt_image)
             self.image_label.setPixmap(pixmap)
         
-        elif self.start == False:
+        elif start == False:
             # self.image_label.setText("未開始")
             pass
     
@@ -147,7 +203,7 @@ class VideoWidget(QWidget):
         event.accept()
     
     def start_process(self):
-        
+        global start      
         if self.countdown_seconds > 0:
             self.image_label.setText(f"倒數 {self.countdown_seconds} 秒開始")
             self.countdown_seconds -= 1
@@ -155,10 +211,22 @@ class VideoWidget(QWidget):
         else:
             self.image_label.setText("開始！")
             self.cap = cv2.VideoCapture(0)
-            self.start = True  # 倒數完畢才開始執行你的邏輯
+            #啟動傳輸
+            self.send_stm32_data.serial_timer.start(100)
+            
+            # 倒數完畢才開始執行你的邏輯
+            start = True  
         
     def stop_process(self):
-        self.start = False
+        global origin_x
+        global origin_y
+        global start
+        #停止傳輸
+        self.send_stm32_data.serial_timer.stop()
+        start = False
+        self.origin_set = False
+        origin_x = 642
+        origin_y = 320
         self.image_label.setStyleSheet("background-color: black;" 
                                        "color: white;"
                                        "font-size: 24px;"           # 设置字体大小，可选
@@ -166,6 +234,50 @@ class VideoWidget(QWidget):
         self.image_label.setText("未開始")
         self.countdown_seconds = 3
         self.cap.release() 
+        
+    def poweroff(self):
+        message = QMessageBox()
+        # message.setMinimumSize(1080, 600)
+        # message.showMaximized()
+        message.setWindowTitle("poweroff")
+        message.setInformativeText("你確定要關機了嘛？")
+        message.setIcon(QMessageBox.Icon.Critical)
+        message.setStandardButtons(QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
+        message.setStyleSheet("""
+        QLabel {
+            font-size: 36px;
+        }
+        QPushButton {
+            font-size: 28px;
+            min-width: 120px;
+            min-height: 60px;
+        }
+    """)
+            
+        ret = message.exec()
+        
+        
+        if ret == QMessageBox.StandardButton.Ok:
+            subprocess.run(['poweroff'],check=True,capture_output=True,text=True)
+        
+ 
+class Stm32_serial():
+    def __init__(self):
+        super().__init__()
+        self.ser = serial.Serial('/dev/ttyUSB0', baudrate=115200, timeout=1)
+        self.serial_timer = QTimer()
+        self.serial_timer.timeout.connect(self.write_serial)
+    
+    def read_serial(self):
+        global read_data
+        
+        if self.ser.in_waiting:
+            data = self.ser.readline().decode('utf-8', errors='ignore').strip()
+            if data:
+                read_data = data
+                    
+    def write_serial(self):
+        self.ser.write(write_data.encode())
 
 #-------------------------main----------------------------
 def main():
@@ -177,8 +289,14 @@ def main():
     
     # 執行應用程式
     sys.exit(app.exec())
+
+def serials():    
+    global start
+    s = Stm32_serial()
+    while True:
+        if start == True:
+            s.write_serial()
+        time.sleep(0.1)
     
 if __name__ == "__main__":
-    # main()
-    a = threading.Thread(target=main)
-    a.start()
+    main()
