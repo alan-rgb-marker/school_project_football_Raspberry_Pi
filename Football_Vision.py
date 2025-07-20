@@ -9,21 +9,33 @@ import sys
 import subprocess
 import time
 
-origin_x = 642
-origin_y = 320
-
-ball_x = 0
-ball_y = 0
-
 read_data = None
-write_data = "hello world"
+
+init_write_data = f"s000,000p"
+write_data = init_write_data
+
+
 
 #啟動
 start = False
 
 class DetectCircle:
     def __init__(self):
-        pass
+        super().__init__()
+        self.origin_x = 642
+        self.origin_y = 320
+        #值計長度
+        self.real_length_x = 290
+        self.real_length_y = 295
+        
+        #像素、實際距離比例
+        self.proportion_x = 1
+        self.proportion_y = 1
+        
+        #球的座標
+        self.ball_x = 0
+        self.ball_y = 0
+        
 
     def circle_detect(self, frame):  
         gray_gauss_canny_frame = cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
@@ -43,25 +55,26 @@ class DetectCircle:
         return circles
 
     def set_origin(self, circles):
-        global origin_x
-        global origin_y
-
         if circles is not None:
             # 圓看誰在左上角
-            origin_x = int(min(circles[0, :, 0]))
-            origin_y = int(min(circles[0, :, 1]))
+            self.origin_x = int(min(circles[0, :, 0]))
+            self.origin_y = int(min(circles[0, :, 1]))
         # return frame
     
     def find_ball(self, circles):
-        global ball_x
-        global ball_y
-        global origin_x
-        global origin_y
-        for i in circles[0, :]:
-            #靠球的半徑判斷哪個是球
-            if i[2] > 14 and i[2] < 17:
-                ball_x = i[0] - origin_x
-                ball_y = i[1] - origin_y
+        global write_data
+        if circles is not None:
+            for i in circles[0, :]:
+                #靠球的半徑判斷哪個是球
+                if i[2] > 11 and i[2] < 14:
+                    self.ball_x = int(i[0] - self.origin_x)
+                    self.ball_y = int(i[1] - self.origin_y)
+                    #實際球的座標
+                    real_ball_x = int(self.ball_x * self.proportion_x)
+                    real_ball_y = int(self.ball_y * self.proportion_y)
+                    
+                    write_data = f's{real_ball_x:03d},{real_ball_y:03d}p'
+                    print(write_data)
     
     def draw_circle(self, frame, circles):
         if circles is not None:
@@ -72,11 +85,17 @@ class DetectCircle:
                 # 繪製圓心
                 cv2.circle(frame, (i[0], i[1]), 2, (0, 0, 255), 3)  # 紅色圓心
                 # 顯示圓心座標
-                cv2.putText(frame, f"({int(i[0]) - origin_x}, {int(i[1]) - origin_y}, {i[2]})", (i[0] + 15, i[1]+10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+                cv2.putText(frame, f"({i[0]-self.origin_x}, {i[1]-self.origin_y})", (i[0] + 15, i[1]+10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
         # 顯示原點
-        cv2.circle(frame, (origin_x, origin_y), 5, (255, 0, 255), -1)  
+        cv2.circle(frame, (self.origin_x, self.origin_y), 5, (255, 0, 255), -1)  
         # 顯示原點座標
-        cv2.putText(frame, f"({0}, {0})", (origin_x + 15, origin_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
+        cv2.putText(frame, f"({0}, {0})", (self.origin_x + 15, self.origin_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
+    
+    # 機算長度像比例
+    def calculateScaleRatio(self):
+        self.proportion_x = self.real_length_x / self.ball_x
+        self.proportion_y = self.real_length_y / self.ball_y
+        #像素x比例=實際長度
 
 class VideoWidget(QWidget):
     def __init__(self):
@@ -166,30 +185,28 @@ class VideoWidget(QWidget):
                 return
 
             # 裁剪影像
-            frame = frame[0:330, 0:640]
+            frame = frame[0:380, 0:640]
 
             # 檢測圓形
             circles = self.detect.circle_detect(frame)
 
             # 如果還沒設定原點，嘗試設定
             if not self.origin_set:
-                if circles is not None and circles.shape[1] == 1:
+                if circles is not None and circles.shape[1] == 2:
                     self.detect.set_origin(circles)
                     self.origin_set = True
             else:
-                self.detect.find_ball()
+                self.detect.find_ball(circles)
             # 繪製圓形
             self.detect.draw_circle(frame, circles)
 
-            
-            
             # 轉換為 QImage 並顯示
             rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             # rgb_image = frame
             h, w, ch = rgb_image.shape
-            # bytes_per_line = ch * w
-            # qt_image = QImage(frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
-            qt_image = QImage(rgb_image.data, w, h, QImage.Format_RGB888)
+            bytes_per_line = ch * w
+            qt_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
+            # qt_image = QImage(rgb_image.data, w, h, QImage.Format_RGB888)
 
             pixmap = QPixmap.fromImage(qt_image)
             self.image_label.setPixmap(pixmap)
@@ -203,30 +220,66 @@ class VideoWidget(QWidget):
         event.accept()
     
     def start_process(self):
-        global start      
+        global write_data
+        self.image_label.setText("初始化中，請稍等...")
+
+        # 傳送初始化命令
+        write_data = "init,init"
+        self.send_stm32_data.write_serial()
+
+        # 啟動輪詢等待 STM32 回傳 'read'
+        QTimer.singleShot(100, self.check_init_response)
+
+
+    def check_init_response(self):
+        global read_data
+        self.send_stm32_data.read_serial()
+
+        if read_data == "read":
+            self.countdown_seconds = 3
+            self.start_countdown()
+        else:
+            QTimer.singleShot(100, self.check_init_response)  # 每 100ms 檢查一次
+
+
+    def start_countdown(self):
         if self.countdown_seconds > 0:
             self.image_label.setText(f"倒數 {self.countdown_seconds} 秒開始")
             self.countdown_seconds -= 1
-            QTimer.singleShot(1000, self.start_process)  # 每 1 秒呼叫一次自己
+            QTimer.singleShot(1000, self.start_countdown)
         else:
-            self.image_label.setText("開始！")
-            self.cap = cv2.VideoCapture(0)
-            #啟動傳輸
-            self.send_stm32_data.serial_timer.start(100)
-            
-            # 倒數完畢才開始執行你的邏輯
-            start = True  
+            self.start_main_process()
+
+
+    def start_main_process(self):
+        global write_data, start
+
+        self.image_label.setText("開始！")
+
+        self.cap = cv2.VideoCapture(0)
+
+        write_data = "starttart"
+        self.send_stm32_data.write_serial()
+
+        self.send_stm32_data.serial_timer.start(20)
+
+        start = True
+       
+        
         
     def stop_process(self):
-        global origin_x
-        global origin_y
         global start
+        global write_data
+        global read_data
+        global init_write_data
         #停止傳輸
         self.send_stm32_data.serial_timer.stop()
         start = False
+        write_data = init_write_data
+        read_data = None
         self.origin_set = False
-        origin_x = 642
-        origin_y = 320
+        self.origin_x = 642
+        self.origin_y = 320
         self.image_label.setStyleSheet("background-color: black;" 
                                        "color: white;"
                                        "font-size: 24px;"           # 设置字体大小，可选
@@ -234,6 +287,10 @@ class VideoWidget(QWidget):
         self.image_label.setText("未開始")
         self.countdown_seconds = 3
         self.cap.release() 
+        write_data = "stopstops"
+        self.send_stm32_data.write_serial()
+        
+        self.send_stm32_data.ser.reset_input_buffer()
         
     def poweroff(self):
         message = QMessageBox()
@@ -259,12 +316,13 @@ class VideoWidget(QWidget):
         
         if ret == QMessageBox.StandardButton.Ok:
             subprocess.run(['poweroff'],check=True,capture_output=True,text=True)
+            
         
  
 class Stm32_serial():
     def __init__(self):
         super().__init__()
-        self.ser = serial.Serial('/dev/ttyUSB0', baudrate=115200, timeout=1)
+        self.ser =  serial.Serial('/dev/ttyUSB0', baudrate=115200, timeout=1)
         self.serial_timer = QTimer()
         self.serial_timer.timeout.connect(self.write_serial)
     
@@ -272,10 +330,10 @@ class Stm32_serial():
         global read_data
         
         if self.ser.in_waiting:
-            data = self.ser.readline().decode('utf-8', errors='ignore').strip()
+            data = self.ser.readline().decode('ascii', errors='ignore').strip()
             if data:
                 read_data = data
-                    
+        
     def write_serial(self):
         self.ser.write(write_data.encode())
 
