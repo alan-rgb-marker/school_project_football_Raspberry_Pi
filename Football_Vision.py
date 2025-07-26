@@ -75,6 +75,10 @@ class DetectCircle:
                     
                     write_data = f's{real_ball_x:03d},{real_ball_y:03d}p'
                     print(write_data)
+                else:
+                    write_data = f'isno_ball'
+                    print(write_data)
+
     
     def draw_circle(self, frame, circles):
         if circles is not None:
@@ -190,6 +194,7 @@ class VideoWidget(QWidget):
             # 檢測圓形
             circles = self.detect.circle_detect(frame)
 
+            
             # 如果還沒設定原點，嘗試設定
             if not self.origin_set:
                 if circles is not None and circles.shape[1] == 2:
@@ -217,7 +222,7 @@ class VideoWidget(QWidget):
     
     def closeEvent(self, event):
         self.cap.release()
-        event.accept()
+        event.accept
     
     def start_process(self):
         global write_data
