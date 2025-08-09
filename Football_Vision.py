@@ -9,7 +9,7 @@ import sys
 import subprocess
 import time
 
-read_data = None
+
 
 init_write_data = f"s000,000p"
 # write_data = init_write_data
@@ -66,7 +66,7 @@ class DetectCircle:
         if circles is not None:
             for i in circles[0, :]:
                 #靠球的半徑判斷哪個是球
-                if i[2] > 11 and i[2] < 14:
+                if i[2] > 11 and i[2] < 16:
                     self.ball_x = int(i[0] - self.origin_x)
                     self.ball_y = int(i[1] - self.origin_y)
                     #實際球的座標
@@ -79,7 +79,10 @@ class DetectCircle:
                     write_data = f's{real_ball_x:03d},{real_ball_y:03d}p'
                     print(write_data)
                     return write_data
-                    
+                else:   
+                    return None
+        else:
+            return None          
                     
                 # else:
                 #     write_data = f'isno_ball'
@@ -96,7 +99,7 @@ class DetectCircle:
                 # 繪製圓心
                 cv2.circle(frame, (i[0], i[1]), 2, (0, 0, 255), 3)  # 紅色圓心
                 # 顯示圓心座標
-                cv2.putText(frame, f"({i[0]-self.origin_x}, {i[1]-self.origin_y})", (i[0] + 15, i[1]+10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+                cv2.putText(frame, f"({i[0]-self.origin_x}, {i[1]-self.origin_y}, {i[2]})", (i[0] + 15, i[1]+10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
         # 顯示原點
         cv2.circle(frame, (self.origin_x, self.origin_y), 5, (255, 0, 255), -1)  
         # 顯示原點座標
@@ -174,6 +177,9 @@ class VideoWidget(QWidget):
         self.detect = DetectCircle()
         self.origin_set = False
         
+        # 暫存球的座標
+        self.ball_data_tmp = None
+        
         # 建立計時器來更新影像
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_frame)
@@ -182,9 +188,12 @@ class VideoWidget(QWidget):
         #啟動變數
         self.countdown_seconds = 2
         
-        
         #串口輸入輸出
         self.send_stm32_data = Stm32_serial()
+        
+        # 分數
+        self.computer_score = 0
+        self.player_score = 0
         
     #主程式：偵測圓和設定原點    
     def update_frame(self):
@@ -208,7 +217,12 @@ class VideoWidget(QWidget):
                     self.origin_set = True
             else:
                 ball_data = self.detect.find_ball(circles)
-                self.send_stm32_data.write_serial(ball_data)
+                if ball_data is not None:
+                    self.send_stm32_data.write_serial(ball_data)
+                    self.ball_data_tmp = ball_data
+                else:
+                    self.send_stm32_data.write_serial(self.ball_data_tmp)
+                    print(self.ball_data_tmp)
              
             # 繪製圓形
             self.detect.draw_circle(frame, circles)
@@ -227,6 +241,18 @@ class VideoWidget(QWidget):
         elif start == False:
             # self.image_label.setText("未開始")
             pass
+        
+    def update_goal(self, read_data):
+        if read_data is not None:
+            if read_data == "goal_p":
+                # 我方進球
+                self.player_score += 1
+                self.player_label.setText(f"我方\n{self.player_score}")
+            elif read_data == "goal_c":
+                # 電腦進球
+                self.computer_score += 1
+                self.computer_label.setText(f"電腦\n{self.computer_score}")
+        
     
     def closeEvent(self, event):
         self.cap.release()
@@ -245,8 +271,7 @@ class VideoWidget(QWidget):
 
 
     def check_init_response(self):
-        global read_data
-        self.send_stm32_data.read_serial()
+        read_data = self.send_stm32_data.read_serial()
 
         if read_data == "read":
             self.countdown_seconds = 2
@@ -273,18 +298,19 @@ class VideoWidget(QWidget):
 
         start_data = "starttart"
         self.send_stm32_data.write_serial(start_data)
+        self.send_stm32_data.read_data.connect(self.update_goal)
+        self.send_stm32_data.start()  # 啟動串口讀取線
+        
         
         start = True
 
     def stop_process(self):
         global start
         global write_data
-        global read_data
         global init_write_data
         #停止傳輸
         start = False
         write_data = init_write_data
-        read_data = None
         self.origin_set = False
         stop_data = "stopstops"
         self.send_stm32_data.write_serial(stop_data)
@@ -299,6 +325,14 @@ class VideoWidget(QWidget):
         self.cap.release() 
         
         self.send_stm32_data.ser.reset_input_buffer()
+        
+        self.computer_score = 0
+        self.player_score = 0
+        self.computer_label.setText(f"電腦\n{self.computer_score}")
+        self.player_label.setText(f"我方\n{self.player_score}")
+        self.send_stm32_data.read_data.disconnect(self.update_goal)
+        
+        
         
     def poweroff(self):
         message = QMessageBox()
@@ -332,16 +366,33 @@ class Stm32_serial(QThread):
         self.ser =  serial.Serial('/dev/ttyUSB0', baudrate=115200, timeout=1)
 
     def read_serial(self):
-        global read_data
-        
         if self.ser.in_waiting:
-            data = self.ser.readline().decode('ascii', errors='ignore').strip()
-            if data:
-                read_data = data
+            raw = self.ser.readline()
+            try:
+                data = raw.decode('utf-8', errors='ignore').strip()
+                if data:
+                    return data
+            except Exception as e:
+                print("Decode error:", e, raw)
+        return None
+        # if self.ser.in_waiting:
+        #     read_data = self.ser.readline().decode('ascii', errors='ignore').strip()
+        #     if read_data:
+        #         return read_data
+    
         
     def write_serial(self, write_data:str):
         if write_data is not None:
             self.ser.write(write_data.encode())
+            
+    def run(self):
+        global start
+        while start:
+            goal_data = self.read_serial()
+            if goal_data:
+                self.read_data.emit(goal_data)
+            # 等待一段時間以避免過度頻繁讀取
+            time.sleep(0.01)
 
 #-------------------------main----------------------------
 def main():
