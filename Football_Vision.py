@@ -4,7 +4,7 @@ import serial
 import threading
 from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton, QSizePolicy, QMessageBox
 from PySide6.QtGui import QImage, QPixmap
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QThread, Signal
 import sys
 import subprocess
 import time
@@ -12,9 +12,7 @@ import time
 read_data = None
 
 init_write_data = f"s000,000p"
-write_data = init_write_data
-
-
+# write_data = init_write_data
 
 #啟動
 start = False
@@ -36,6 +34,8 @@ class DetectCircle:
         self.ball_x = 0
         self.ball_y = 0
         
+        # 暫存球的座標
+        self.real_ball_y_tmp = 0
 
     def circle_detect(self, frame):  
         gray_gauss_canny_frame = cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
@@ -62,7 +62,7 @@ class DetectCircle:
         # return frame
     
     def find_ball(self, circles):
-        global write_data
+        # global write_data
         if circles is not None:
             for i in circles[0, :]:
                 #靠球的半徑判斷哪個是球
@@ -73,13 +73,20 @@ class DetectCircle:
                     real_ball_x = int(self.ball_x * self.proportion_x)
                     real_ball_y = int(self.ball_y * self.proportion_y)
                     
+                    if abs(real_ball_y-self.real_ball_y_tmp) > 3:
+                        # real_ball_x_tmp = real_ball_x
+                        self.real_ball_y_tmp = real_ball_y
                     write_data = f's{real_ball_x:03d},{real_ball_y:03d}p'
                     print(write_data)
-                else:
-                    write_data = f'isno_ball'
-                    print(write_data)
+                    return write_data
+                    
+                    
+                # else:
+                #     write_data = f'isno_ball'
+                #     print(write_data)
+                #     return write_data
 
-    
+
     def draw_circle(self, frame, circles):
         if circles is not None:
             circles = np.uint16(np.around(circles))
@@ -173,8 +180,7 @@ class VideoWidget(QWidget):
         self.timer.start(15)  # 30ms 更新一次
         
         #啟動變數
-          
-        self.countdown_seconds = 3
+        self.countdown_seconds = 2
         
         
         #串口輸入輸出
@@ -201,7 +207,9 @@ class VideoWidget(QWidget):
                     self.detect.set_origin(circles)
                     self.origin_set = True
             else:
-                self.detect.find_ball(circles)
+                ball_data = self.detect.find_ball(circles)
+                self.send_stm32_data.write_serial(ball_data)
+             
             # 繪製圓形
             self.detect.draw_circle(frame, circles)
 
@@ -230,10 +238,10 @@ class VideoWidget(QWidget):
 
         # 傳送初始化命令
         write_data = "init,init"
-        self.send_stm32_data.write_serial()
+        self.send_stm32_data.write_serial(write_data)
 
         # 啟動輪詢等待 STM32 回傳 'read'
-        QTimer.singleShot(100, self.check_init_response)
+        QTimer.singleShot(10, self.check_init_response)
 
 
     def check_init_response(self):
@@ -241,7 +249,7 @@ class VideoWidget(QWidget):
         self.send_stm32_data.read_serial()
 
         if read_data == "read":
-            self.countdown_seconds = 3
+            self.countdown_seconds = 2
             self.start_countdown()
         else:
             QTimer.singleShot(100, self.check_init_response)  # 每 100ms 檢查一次
@@ -257,32 +265,29 @@ class VideoWidget(QWidget):
 
 
     def start_main_process(self):
-        global write_data, start
+        global start
 
         self.image_label.setText("開始！")
 
         self.cap = cv2.VideoCapture(0)
 
-        write_data = "starttart"
-        self.send_stm32_data.write_serial()
-
-        self.send_stm32_data.serial_timer.start(20)
-
+        start_data = "starttart"
+        self.send_stm32_data.write_serial(start_data)
+        
         start = True
-       
-        
-        
+
     def stop_process(self):
         global start
         global write_data
         global read_data
         global init_write_data
         #停止傳輸
-        self.send_stm32_data.serial_timer.stop()
         start = False
         write_data = init_write_data
         read_data = None
         self.origin_set = False
+        stop_data = "stopstops"
+        self.send_stm32_data.write_serial(stop_data)
         self.origin_x = 642
         self.origin_y = 320
         self.image_label.setStyleSheet("background-color: black;" 
@@ -290,10 +295,8 @@ class VideoWidget(QWidget):
                                        "font-size: 24px;"           # 设置字体大小，可选
                                        "font-weight: bold;")
         self.image_label.setText("未開始")
-        self.countdown_seconds = 3
+        self.countdown_seconds = 2
         self.cap.release() 
-        write_data = "stopstops"
-        self.send_stm32_data.write_serial()
         
         self.send_stm32_data.ser.reset_input_buffer()
         
@@ -317,20 +320,17 @@ class VideoWidget(QWidget):
     """)
             
         ret = message.exec()
-        
-        
+
         if ret == QMessageBox.StandardButton.Ok:
             subprocess.run(['poweroff'],check=True,capture_output=True,text=True)
-            
-        
- 
-class Stm32_serial():
+
+class Stm32_serial(QThread):
+    read_data = Signal(str)  # 用於發送讀取到的數據
+    
     def __init__(self):
         super().__init__()
         self.ser =  serial.Serial('/dev/ttyUSB0', baudrate=115200, timeout=1)
-        self.serial_timer = QTimer()
-        self.serial_timer.timeout.connect(self.write_serial)
-    
+
     def read_serial(self):
         global read_data
         
@@ -339,8 +339,9 @@ class Stm32_serial():
             if data:
                 read_data = data
         
-    def write_serial(self):
-        self.ser.write(write_data.encode())
+    def write_serial(self, write_data:str):
+        if write_data is not None:
+            self.ser.write(write_data.encode())
 
 #-------------------------main----------------------------
 def main():
@@ -353,13 +354,5 @@ def main():
     # 執行應用程式
     sys.exit(app.exec())
 
-def serials():    
-    global start
-    s = Stm32_serial()
-    while True:
-        if start == True:
-            s.write_serial()
-        time.sleep(0.1)
-    
 if __name__ == "__main__":
     main()
