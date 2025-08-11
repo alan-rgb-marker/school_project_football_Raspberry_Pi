@@ -193,6 +193,10 @@ class VideoWidget(QWidget):
         # 分數
         self.computer_score = 0
         self.player_score = 0
+        self.goal_timer = Goal_timer()
+        self.goal_timer.has_ball.connect(self.update_if_ball)
+        self.if_ball = True
+        self.isnoball = False
         
     #主程式：偵測圓和設定原點    
     def update_frame(self):
@@ -219,9 +223,24 @@ class VideoWidget(QWidget):
                 if ball_data is not None:
                     self.send_stm32_data.write_serial(ball_data)
                     self.ball_data_tmp = ball_data
+                    self.goal_timer.countdown_seconds = 2
+                    self.isnoball = False
                 else:
-                    self.send_stm32_data.write_serial(self.ball_data_tmp)
-                    print(self.ball_data_tmp)
+                    if self.if_ball:
+                        # 如果沒有偵測到球，則傳送暫存的球數據 
+                        self.send_stm32_data.write_serial(self.ball_data_tmp)
+                        print(self.ball_data_tmp)
+                        
+                        if not self.goal_timer.isRunning():
+                            self.goal_timer.start()                            
+                        
+                    else:
+                        if self.isnoball == False:
+                            self.send_stm32_data.write_serial("isno_ball")
+                            self.isnoball = True
+                        
+                        print("isno_ball")
+                        
              
             # 繪製圓形
             self.detect.draw_circle(frame, circles)
@@ -251,6 +270,9 @@ class VideoWidget(QWidget):
                 # 電腦進球
                 self.computer_score += 1
                 self.computer_label.setText(f"電腦\n{self.computer_score}")
+    
+    def update_if_ball(self, has_ball):
+        self.if_ball = has_ball
         
     
     def closeEvent(self, event):
@@ -393,6 +415,25 @@ class Stm32_serial(QThread):
                 self.read_data.emit(goal_data)
             # 等待一段時間以避免過度頻繁讀取
             time.sleep(0.01)
+            
+class Goal_timer(QThread):
+    has_ball = Signal(bool)  # 用於發送是否有球的狀態
+    
+    def __init__(self, countdown_seconds=2):
+        super().__init__()
+        self.countdown_seconds = countdown_seconds
+        
+        self.running = True
+
+    def run(self):
+        while self.running and self.countdown_seconds > 0:
+            time.sleep(1)
+            self.countdown_seconds -= 1
+            print(f"倒數 {self.countdown_seconds} 秒")
+        
+        if self.countdown_seconds == 0:
+            print("倒數結束")
+            self.has_ball.emit(False)
 
 #-------------------------main----------------------------
 def main():
