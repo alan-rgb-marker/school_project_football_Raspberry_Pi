@@ -66,7 +66,7 @@ class DetectCircle:
         if circles is not None:
             for i in circles[0, :]:
                 #靠球的半徑判斷哪個是球
-                if i[2] > 11 and i[2] < 16:
+                if i[2] > 11 and i[2] <= 17:
                     self.ball_x = int(i[0] - self.origin_x)
                     self.ball_y = int(i[1] - self.origin_y)
                     #實際球的座標
@@ -79,8 +79,7 @@ class DetectCircle:
                     write_data = f's{real_ball_x:03d},{real_ball_y:03d}p'
                     print(write_data)
                     return write_data
-                else:   
-                    return None
+                
         else:
             return None          
                     
@@ -326,6 +325,7 @@ class VideoWidget(QWidget):
         
         self.send_stm32_data.ser.reset_input_buffer()
         
+        self.ball_data_tmp = None
         self.computer_score = 0
         self.player_score = 0
         self.computer_label.setText(f"電腦\n{self.computer_score}")
@@ -369,7 +369,7 @@ class Stm32_serial(QThread):
         if self.ser.in_waiting:
             raw = self.ser.readline()
             try:
-                data = raw.decode('utf-8', errors='ignore').strip()
+                data = raw.decode('ascii', errors='ignore').strip()
                 if data:
                     return data
             except Exception as e:
