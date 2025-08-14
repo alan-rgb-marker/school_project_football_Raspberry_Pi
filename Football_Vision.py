@@ -9,6 +9,8 @@ import sys
 import subprocess
 import time
 
+import pygame
+
 
 
 init_write_data = f"s000,000p"
@@ -198,6 +200,13 @@ class VideoWidget(QWidget):
         self.if_ball = True
         self.isnoball = False
         
+        # 開始音樂
+        self.start_music_thread = Start_Music_Thread()
+        # 得分音樂
+        self.goal_music_thread = Goal_Music_Thread()
+        # 輸球音樂
+        self.lose_music_thread = Goal_Music_Thread("lose.wav")
+        
     #主程式：偵測圓和設定原點    
     def update_frame(self):
         global start
@@ -209,7 +218,7 @@ class VideoWidget(QWidget):
             # 裁剪影像
             frame = frame[0:380, 0:640]
 
-            # 檢測圓形
+             # 檢測圓形
             circles = self.detect.circle_detect(frame)
 
             
@@ -221,6 +230,7 @@ class VideoWidget(QWidget):
             else:
                 ball_data = self.detect.find_ball(circles)
                 if ball_data is not None:
+                    self.start_music_thread.set_volume(1.0)
                     self.send_stm32_data.write_serial(ball_data)
                     self.ball_data_tmp = ball_data
                     self.goal_timer.countdown_seconds = 2
@@ -262,14 +272,20 @@ class VideoWidget(QWidget):
         
     def update_goal(self, read_data):
         if read_data is not None:
+            self.start_music_thread.set_volume(0.4)
             if read_data == "goal_p":
                 # 我方進球
                 self.player_score += 1
                 self.player_label.setText(f"我方\n{self.player_score}")
+                
+                self.lose_music_thread.start()  # 啟動得分音樂線程
+                # self.goal_music_thread.run()
             elif read_data == "goal_c":
                 # 電腦進球
                 self.computer_score += 1
                 self.computer_label.setText(f"電腦\n{self.computer_score}")
+                self.goal_music_thread.start()  # 啟動得分音樂線程
+                # self.goal_music_thread.run()
     
     def update_if_ball(self, has_ball):
         self.if_ball = has_ball
@@ -321,6 +337,7 @@ class VideoWidget(QWidget):
         self.send_stm32_data.write_serial(start_data)
         self.send_stm32_data.read_data.connect(self.update_goal)
         self.send_stm32_data.start()  # 啟動串口讀取線
+        self.start_music_thread.start()  # 啟動音樂播放線程
         
         
         start = True
@@ -353,7 +370,8 @@ class VideoWidget(QWidget):
         self.computer_label.setText(f"電腦\n{self.computer_score}")
         self.player_label.setText(f"我方\n{self.player_score}")
         self.send_stm32_data.read_data.disconnect(self.update_goal)
-        
+        # self.start_music_thread.stop()  # 停止音樂播放線程
+        pygame.mixer.stop()  # 停止音樂播放
         
         
     def poweroff(self):
@@ -434,6 +452,46 @@ class Goal_timer(QThread):
         if self.countdown_seconds == 0:
             print("倒數結束")
             self.has_ball.emit(False)
+            
+
+class Start_Music_Thread(QThread):
+    def __init__(self, music_file="war-battle-military-music-338668.mp3"):
+        super().__init__()
+        self.music_file = music_file
+        self.running = True
+        self.sound = None
+
+    def run(self):
+        pygame.mixer.init()
+        # pygame.mixer.music.load(self.music_file)
+        self.sound = pygame.mixer.Sound(self.music_file)
+        self.sound.play(-1)
+        while self.running and pygame.mixer.music.get_busy():
+            time.sleep(0.1)
+
+    def stop(self):
+        self.running = False
+        pygame.mixer.music.stop()
+        
+    def set_volume(self, volume):
+        self.sound.set_volume(volume)
+
+class Goal_Music_Thread(QThread):
+    def __init__(self, music_file="win.wav"):
+        super().__init__()
+        self.music_file = music_file
+        self.running = True
+
+    def run(self):
+        pygame.mixer.init()
+        sound = pygame.mixer.Sound(self.music_file)
+        sound.play(0)
+        # while self.running and pygame.mixer.music.get_busy():
+        #     time.sleep(0.1)
+
+    # def stop(self):
+    #     self.running = False
+    #     pygame.mixer.music.stop()
 
 #-------------------------main----------------------------
 def main():
