@@ -277,14 +277,14 @@ class VideoWidget(QWidget):
                 # 我方進球
                 self.player_score += 1
                 self.player_label.setText(f"我方\n{self.player_score}")
+                self.goal_music_thread.start()  # 啟動得分音樂線程
                 
-                self.lose_music_thread.start()  # 啟動得分音樂線程
                 # self.goal_music_thread.run()
             elif read_data == "goal_c":
                 # 電腦進球
                 self.computer_score += 1
                 self.computer_label.setText(f"電腦\n{self.computer_score}")
-                self.goal_music_thread.start()  # 啟動得分音樂線程
+                self.lose_music_thread.start()  # 啟動得分音樂線程
                 # self.goal_music_thread.run()
     
     def update_if_ball(self, has_ball):
