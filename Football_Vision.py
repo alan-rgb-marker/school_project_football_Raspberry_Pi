@@ -135,16 +135,16 @@ class VideoWidget(QWidget):
         #按鈕
         layout = QGridLayout()
         self.start_button = QPushButton("開始")
-        self.start_button.setStyleSheet("font-size: 40px")
+        self.start_button.setStyleSheet("font-size: 32px")
         self.start_button.clicked.connect(self.start_process)
         
         self.stop_button = QPushButton("停止")
-        self.stop_button.setStyleSheet("font-size: 40px")
+        self.stop_button.setStyleSheet("font-size: 32px")
         self.stop_button.clicked.connect(self.stop_process)
         
         #關機
         self.poweroff_button = QPushButton("關機")
-        self.poweroff_button.setStyleSheet("font-size: 40px")
+        self.poweroff_button.setStyleSheet("font-size: 32px")
         self.poweroff_button.clicked.connect(self.poweroff)
         
         layout.addWidget(self.start_button, 0, 0)
@@ -159,7 +159,7 @@ class VideoWidget(QWidget):
         
         for lbl in [self.computer_label, self._label, self.player_label]:
             lbl.setAlignment(Qt.AlignCenter)
-            lbl.setStyleSheet("font-size: 36px; font-weight: bold;")
+            lbl.setStyleSheet("font-size: 28px; font-weight: bold;")
         
         score_lauout.addWidget(self.computer_label)
         score_lauout.addWidget(self._label)
