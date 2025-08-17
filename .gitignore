@@ -1,3 +1,6 @@
 .venv/*
 *.odp
 透視轉換測試.py
+build/
+dist/
+*.spec
