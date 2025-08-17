@@ -333,7 +333,7 @@ class VideoWidget(QWidget):
 
         self.image_label.setText("開始！")
 
-        self.cap = cv2.VideoCapture(2)
+        self.cap = cv2.VideoCapture(0)
 
         start_data = "starttart"
         self.send_stm32_data.write_serial(start_data)
