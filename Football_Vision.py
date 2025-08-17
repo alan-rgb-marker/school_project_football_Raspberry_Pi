@@ -74,6 +74,8 @@ class DetectCircle:
                     #實際球的座標
                     real_ball_x = int(self.ball_x * self.proportion_x)
                     real_ball_y = int(self.ball_y * self.proportion_y)
+                    if real_ball_y > 300:
+                        real_ball_y = 300
                     
                     if abs(real_ball_y-self.real_ball_y_tmp) > 3:
                         # real_ball_x_tmp = real_ball_x
@@ -331,7 +333,7 @@ class VideoWidget(QWidget):
 
         self.image_label.setText("開始！")
 
-        self.cap = cv2.VideoCapture(0)
+        self.cap = cv2.VideoCapture(2)
 
         start_data = "starttart"
         self.send_stm32_data.write_serial(start_data)
