@@ -62,13 +62,20 @@ class DetectCircle:
             self.origin_x = int(min(circles[0, :, 0]))
             self.origin_y = int(min(circles[0, :, 1]))
         # return frame
+        
+    def filterPlayerArea(self, x):
+        if (x >= 150 and x <= 160) or (x >= 332 and x <= 337)or (x >= 525 and x <= 535):
+            return False
+        else:
+            return True
     
     def find_ball(self, circles):
         # global write_data
         if circles is not None:
             for i in circles[0, :]:
+                filter = self.filterPlayerArea(int(i[0]-self.origin_x))
                 #靠球的半徑判斷哪個是球
-                if i[2] > 11 and i[2] <= 17:
+                if i[2] > 11 and i[2] <= 17 and filter:
                     self.ball_x = int(i[0] - self.origin_x)
                     self.ball_y = int(i[1] - self.origin_y)
                     #實際球的座標
