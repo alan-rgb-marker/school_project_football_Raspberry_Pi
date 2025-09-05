@@ -164,7 +164,7 @@ class VideoWidget(QWidget):
         score_lauout = QHBoxLayout()
         self.computer_label = QLabel("電腦\n0")
         self._label = QLabel("比分\n  :  ")
-        self.player_label = QLabel("我方\n0")
+        self.player_label = QLabel("玩家\n0")
         
         for lbl in [self.computer_label, self._label, self.player_label]:
             lbl.setAlignment(Qt.AlignCenter)
@@ -285,7 +285,7 @@ class VideoWidget(QWidget):
             if read_data == "goal_p":
                 # 我方進球
                 self.player_score += 1
-                self.player_label.setText(f"我方\n{self.player_score}")
+                self.player_label.setText(f"玩家\n{self.player_score}")
                 self.goal_music_thread.start()  # 啟動得分音樂線程
                 
                 # self.goal_music_thread.run()
@@ -377,7 +377,7 @@ class VideoWidget(QWidget):
         self.computer_score = 0
         self.player_score = 0
         self.computer_label.setText(f"電腦\n{self.computer_score}")
-        self.player_label.setText(f"我方\n{self.player_score}")
+        self.player_label.setText(f"玩家\n{self.player_score}")
         self.send_stm32_data.read_data.disconnect(self.update_goal)
         # self.start_music_thread.stop()  # 停止音樂播放線程
         pygame.mixer.stop()  # 停止音樂播放
