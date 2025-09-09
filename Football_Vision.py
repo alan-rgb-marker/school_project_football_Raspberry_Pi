@@ -64,7 +64,7 @@ class DetectCircle:
         # return frame
         
     def filterPlayerArea(self, x):
-        if (x >= 150 and x <= 160) or (x >= 332 and x <= 337)or (x >= 525 and x <= 535):
+        if (x >= 150 and x <= 160) or (x >= 332 and x <= 337)or (x >= 545 and x <= 550):
             return False
         else:
             return True
@@ -207,7 +207,7 @@ class VideoWidget(QWidget):
         self.goal_timer = Goal_timer()
         self.goal_timer.has_ball.connect(self.update_if_ball)
         self.if_ball = True
-        self.isnoball = False
+        # self.isnoball = False
         
         # 開始音樂
         self.start_music_thread = Start_Music_Thread()
@@ -243,7 +243,8 @@ class VideoWidget(QWidget):
                     self.send_stm32_data.write_serial(ball_data)
                     self.ball_data_tmp = ball_data
                     self.goal_timer.countdown_seconds = 2
-                    self.isnoball = False
+                    self.if_ball = True
+                    # self.isnoball = False
                 else:
                     if self.if_ball:
                         # 如果沒有偵測到球，則傳送暫存的球數據 
@@ -251,12 +252,12 @@ class VideoWidget(QWidget):
                         print(self.ball_data_tmp)
                         
                         if not self.goal_timer.isRunning():
-                            self.goal_timer.start()                            
+                            self.goal_timer.start()
                         
                     else:
-                        if self.isnoball == False:
-                            self.send_stm32_data.write_serial("isno_ball")
-                            self.isnoball = True
+                        # if self.isnoball == False:
+                        self.send_stm32_data.write_serial("isno_ball")
+                            # self.isnoball = True
                         
                         print("isno_ball")
                         
