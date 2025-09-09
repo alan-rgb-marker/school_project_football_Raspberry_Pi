@@ -64,7 +64,7 @@ class DetectCircle:
         # return frame
         
     def filterPlayerArea(self, x):
-        if (x >= 150 and x <= 160) or (x >= 332 and x <= 337)or (x >= 545 and x <= 550):
+        if (x >= 115 and x <= 140) or (x >= 337 and x <= 352)or (x >= 530 and x <= 553):
             return False
         else:
             return True
