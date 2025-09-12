@@ -88,16 +88,11 @@ class DetectCircle:
                         # real_ball_x_tmp = real_ball_x
                         self.real_ball_y_tmp = real_ball_y
                     write_data = f's{real_ball_x:03d},{real_ball_y:03d}p'
-                    print(write_data)
+                    # print(write_data)
                     return write_data
                 
         else:
-            return None          
-                    
-                # else:
-                #     write_data = f'isno_ball'
-                #     print(write_data)
-                #     return write_data
+            return None
 
 
     def draw_circle(self, frame, circles):
@@ -249,7 +244,7 @@ class VideoWidget(QWidget):
                     if self.if_ball:
                         # 如果沒有偵測到球，則傳送暫存的球數據 
                         self.send_stm32_data.write_serial(self.ball_data_tmp)
-                        print(self.ball_data_tmp)
+                        # print(self.ball_data_tmp)
                         
                         if not self.goal_timer.isRunning():
                             self.goal_timer.start()
@@ -433,6 +428,7 @@ class Stm32_serial(QThread):
         
     def write_serial(self, write_data:str):
         if write_data is not None:
+            print(f"寫入: {write_data}")
             self.ser.write(write_data.encode())
             
     def run(self):
