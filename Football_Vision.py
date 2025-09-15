@@ -237,7 +237,7 @@ class VideoWidget(QWidget):
                     self.start_music_thread.set_volume(1.0)
                     self.send_stm32_data.write_serial(ball_data)
                     self.ball_data_tmp = ball_data
-                    self.goal_timer.countdown_seconds = 2
+                    self.goal_timer.countdown_seconds = 0.5
                     self.if_ball = True
                     # self.isnoball = False
                 else:
@@ -443,7 +443,7 @@ class Stm32_serial(QThread):
 class Goal_timer(QThread):
     has_ball = Signal(bool)  # 用於發送是否有球的狀態
     
-    def __init__(self, countdown_seconds=2):
+    def __init__(self, countdown_seconds=0.5):
         super().__init__()
         self.countdown_seconds = countdown_seconds
         
@@ -451,8 +451,8 @@ class Goal_timer(QThread):
 
     def run(self):
         while self.running and self.countdown_seconds > 0:
-            time.sleep(1)
-            self.countdown_seconds -= 1
+            time.sleep(0.5)
+            self.countdown_seconds -= 0.5
             print(f"倒數 {self.countdown_seconds} 秒")
         
         if self.countdown_seconds == 0:
