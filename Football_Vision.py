@@ -203,6 +203,8 @@ class VideoWidget(QWidget):
         self.goal_timer.has_ball.connect(self.update_if_ball)
         self.if_ball = True
         # self.isnoball = False
+        self.goal_c_filter = False
+        self.goal_p_filter = False
         
         # 開始音樂
         self.start_music_thread = Start_Music_Thread()
@@ -240,6 +242,8 @@ class VideoWidget(QWidget):
                     self.goal_timer.countdown_seconds = 0.5
                     self.if_ball = True
                     # self.isnoball = False
+                    self.goal_c_filter = False
+                    self.goal_p_filter = False
                 else:
                     if self.if_ball:
                         # 如果沒有偵測到球，則傳送暫存的球數據 
@@ -276,18 +280,21 @@ class VideoWidget(QWidget):
             pass
         
     def update_goal(self, read_data):
-        if read_data is not None:
+        if read_data is not None and self.if_ball == False:
             self.start_music_thread.set_volume(0.4)
-            if read_data == "goal_p":
+            # 
+            if read_data == "goal_p" and not self.goal_p_filter:
                 # 我方進球
                 self.player_score += 1
+                self.goal_p_filter = True
                 self.player_label.setText(f"玩家\n{self.player_score}")
                 self.goal_music_thread.start()  # 啟動得分音樂線程
                 
                 # self.goal_music_thread.run()
-            elif read_data == "goal_c":
+            elif read_data == "goal_c" and not self.goal_c_filter:
                 # 電腦進球
                 self.computer_score += 1
+                self.goal_c_filter = True
                 self.computer_label.setText(f"電腦\n{self.computer_score}")
                 self.lose_music_thread.start()  # 啟動得分音樂線程
                 # self.goal_music_thread.run()
@@ -437,6 +444,7 @@ class Stm32_serial(QThread):
             goal_data = self.read_serial()
             if goal_data:
                 self.read_data.emit(goal_data)
+                print(goal_data)
             # 等待一段時間以避免過度頻繁讀取
             time.sleep(0.01)
             
